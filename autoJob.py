@@ -1,5 +1,6 @@
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 from datetime import datetime
+from threading import Event
 
 url = ''
 url_offer = ''
@@ -8,26 +9,36 @@ login_email = ''
 login_pwd = ''
 cnt = 0
 isHeadless = False
-startTimeout = 60000
-inJobTimeout = 10000
+#startTimeout = 60000
+#inJobTimeout = 10000
+#noTimeOut = float('Infinity')
 
 def run(playwright_elm):
     # initialize
     browser = playwright_elm.chromium.launch(headless=isHeadless)
     context = browser.new_context()
     page = context.new_page()        
-    page.set_default_navigation_timeout(startTimeout)
+    #page.set_default_navigation_timeout(startTimeout)
     page.goto(url)
     page.wait_for_url(url)
     login(page)
 
-    while cnt < 1000:
+    while True:
         try:            
-            checkLogout(page)
+            #checkLogout(page)
+            #page.set_default_navigation_timeout(inJobTimeout)
             checkOffer(page)
+        except PlaywrightTimeoutError as timeout_e:
+            #page.set_default_navigation_timeout(startTimeout)
+            page.reload()
+            page.wait_for_load_state("load")
+            restartJob(page, timeout_e)
         except Exception as e:
-            restartJob(page, e)   
-
+            curr_t = datetime.now()
+            print("Exception caught at ", curr_t, ", job will be stopped")
+            print(e)
+            page.pause()
+              
 
 def login(page_elm):    
     print("-----login() start-----") 
@@ -37,27 +48,29 @@ def login(page_elm):
     page_elm.wait_for_url(url_job)
     loginTime = datetime.now()
     print("finish login time:", loginTime)
-    page_elm.set_default_navigation_timeout(inJobTimeout)
+    #page_elm.set_default_navigation_timeout(inJobTimeout)
     print("-----login() end-----")
     #page.get_by_role("link", name="Job Offers").click()    
 
 
 def checkOffer(page_elm):
     global cnt
-    print("-----checkOffer() start-----")
+    print("-----checkOffer()-----")
     page_elm.goto(url_offer)
     page_elm.wait_for_url(url_offer)
+    page_elm.get_by_role("heading", name="New Offers").wait_for()
     offerHeader = page_elm.get_by_role("heading", name="New Offers")
     noOffer = page_elm.get_by_role("heading", name="Sorry, there’s nothing here yet.")
-    acceptBtn = page_elm.get_by_role("button", name="Accept")
-    calRunCnt()
+    acceptBtn = page_elm.get_by_role("button", name="Accept") 
     while noOffer.is_visible():
+        calRunCnt()
         cnt = cnt + 1
         page_elm.reload()
         page_elm.wait_for_load_state("load")
         offerHeader.wait_for()
         if not noOffer.is_visible():
-            page_elm.pause()
+            #page_elm.pause()
+            Event().wait()
         #if acceptBtn.is_visible():
         #    acceptOffer(page_elm, acceptBtn)
 
@@ -74,6 +87,7 @@ def acceptOffer(page_elm, btn_elm):
 
 
 def calRunCnt():
+    global cnt
     if cnt < 1:
         pass
     elif (cnt % 50 == 0):
@@ -94,11 +108,11 @@ def checkLogout(page_elm):
 def restartJob(page_elm, e):
     print("-----restartJob() start-----")
     endTime = datetime.now()
-    print('Exception occured at ', endTime, ", the ", cnt, "th trial")
-    print(e)
-    page_elm.set_default_navigation_timeout(startTimeout)
+    print('TimeOut at ', endTime, ", the ", cnt, "th trial")
+    print(e)    
     page_elm.goto(url)
     page_elm.wait_for_url(url)
+    checkLogout(page_elm)
     print("-----restartJob() end-----")
     
 
