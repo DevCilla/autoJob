@@ -29,15 +29,22 @@ def run(playwright_elm):
             #page.set_default_navigation_timeout(inJobTimeout)
             checkOffer(page)
         except PlaywrightTimeoutError as timeout_e:
+            print(timeout_e)
+            endTime = datetime.now()
+            print(endTime, ", TIMEOUT after trying ", cnt, " times.")    
             #page.set_default_navigation_timeout(startTimeout)
-            page.reload()
-            page.wait_for_load_state("load")
-            restartJob(page, timeout_e)
+            try:
+                page.close()
+            except:
+                pass
+
+            page = context.new_page()
+            restartJob(page)
         except Exception as e:
             curr_t = datetime.now()
-            print("Exception caught at ", curr_t, ", job will be stopped")
+            print(curr_t, ", Exception caught after trying ", cnt, " times, job will be stopped now.")
             print(e)
-            page.pause()
+            Event().wait()
               
 
 def login(page_elm):    
@@ -69,8 +76,12 @@ def checkOffer(page_elm):
         page_elm.wait_for_load_state("load")
         offerHeader.wait_for()
         if not noOffer.is_visible():
-            #page_elm.pause()
+            logFile = initLogFile()
+            offerTime = datetime.now()
+            print(offerTime, " Offer found after trying  ", cnt, " times") 
+            print(page_elm.content(), file=open(logFile, 'a'))
             Event().wait()
+            page_elm.pause()
         #if acceptBtn.is_visible():
         #    acceptOffer(page_elm, acceptBtn)
 
@@ -97,23 +108,27 @@ def calRunCnt():
 
 def checkLogout(page_elm):
     print("-----checkLogout()-----")
-    if not page_elm.url == url:
-        pass                
-    else:
+    if (page_elm.url == url):
         logoutTime = datetime.now()
-        print(logoutTime, " Website logged out, will login again now.")
-        login(page_elm)
+        print(logoutTime, ", logged out after trying ", cnt, " times, will login again now.")
+        login(page_elm)     
+    else:
+        pass
+        
 
 
-def restartJob(page_elm, e):
-    print("-----restartJob() start-----")
-    endTime = datetime.now()
-    print('TimeOut at ', endTime, ", the ", cnt, "th trial")
-    print(e)    
+def restartJob(page_elm):
+    print("-----restartJob() start-----")    
     page_elm.goto(url)
     page_elm.wait_for_url(url)
     checkLogout(page_elm)
     print("-----restartJob() end-----")
+
+
+def initLogFile():
+    fileName = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    fileName = fileName + "_debug.txt"
+    return fileName
     
 
 with sync_playwright() as playwright:  
