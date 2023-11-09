@@ -19,9 +19,9 @@ def run(playwright_elm):
     context = browser.new_context()
     page = context.new_page()        
     #page.set_default_navigation_timeout(startTimeout)
-    page_elm.goto(url)
-    page_elm.wait_for_url(url)
-    login(page_elm)
+    page.goto(url)
+    page.wait_for_url(url)
+    login(page)
 
     while True:
         try:            
