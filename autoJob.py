@@ -9,54 +9,48 @@ url_job = ''
 login_email = ''
 login_pwd = ''
 cnt = 0
-isHeadless = False
+isHeadless = True
 #startTimeout = 60000
 #inJobTimeout = 10000
 
 def run(playwright_elm):
     # initialize
     browser = playwright_elm.chromium.launch(headless=isHeadless)
-    context = browser.new_context()
-    page = context.new_page()        
-    #page.set_default_navigation_timeout(startTimeout)
-    page.goto(url)
-    page.wait_for_url(url)
-    login(page)
+    context = browser.new_context()    
 
-    while True:
+    while checkNetwork():
         try:            
-            #checkLogout(page)
-            #page.set_default_navigation_timeout(inJobTimeout)
+            page = context.new_page()        
+            #page.set_default_navigation_timeout(startTimeout)
+            page.goto(url)
+            page.wait_for_url(url)
+            login(page)
             checkOffer(page)
         except PlaywrightTimeoutError as timeout_e:
             print(timeout_e)
             endTime = datetime.now()
-            print(endTime, ", TIMEOUT when trying the", cnt, "th times.")    
-            #page.set_default_navigation_timeout(startTimeout)
-            try:
-                page.close()
-            except:
-                pass
-
-            page = context.new_page()      
-            restartJob(page)
+            print(endTime, ", TIMEOUT when trying the", cnt, "th times.") 
+            page.close()
+            print("trying to restart...")   
         except Exception as e:
             curr_t = datetime.now()
-            print(curr_t, ", Exception caught when trying the", cnt, "th times, job will be stopped now.")
+            print(curr_t, ", Exception caught when trying the", cnt, "th times.")
             print("Reason:", e)
-            #Event().wait(waitTime)
+            page.close()
+            print("trying to restart...")            
               
 
 def login(page_elm):    
-    print("-----login() start-----")     
+    #print("-----login() start-----")   
+    page_elm.get_by_role("button", name="Sign In", exact=True).wait_for()  
     page_elm.get_by_placeholder("E-mail address").fill(login_email)
     page_elm.get_by_placeholder("Password").fill(login_pwd)
     page_elm.get_by_role("button", name="Sign In", exact=True).click()
     page_elm.wait_for_url(url_job)
     loginTime = datetime.now()
-    print("finish login time:", loginTime)
+    print("logged in time:", loginTime)
     #page_elm.set_default_navigation_timeout(inJobTimeout)
-    print("-----login() end-----")
+    #print("-----login() end-----")
     #page.get_by_role("link", name="Job Offers").click()    
 
 
@@ -67,37 +61,36 @@ def checkOffer(page_elm):
     page_elm.wait_for_url(url_offer)
     page_elm.get_by_role("heading", name="New Offers").wait_for()
     offerHeader = page_elm.get_by_role("heading", name="New Offers")
-    noOffer = page_elm.get_by_role("heading", name="Sorry, there’s nothing here yet.")    
-    while noOffer.is_visible():        
+    noOffer = page_elm.get_by_role("heading", name="Sorry, there’s nothing here yet.")  
+    noOfferFlag =  noOffer.is_visible()
+    while noOfferFlag:        
         cnt = cnt + 1
         calRunCnt()
         page_elm.reload()
         page_elm.wait_for_load_state("load")
         offerHeader.wait_for()
-        if not noOffer.is_visible():
+        if not (noOfferFlag):
             offerTime = datetime.now()
             print(offerTime, ", Offer found when trying the", cnt, "th trial.") 
-            print(page_elm.content(), file=open("offer_" + initLogFile(), 'a', encoding='utf-8'))     
-            page_elm.get_by_role("row").nth(2).get_by_role("cell").nth(0).click()
-            print(page_elm.content(), file=open("row_" + initLogFile(), 'a', encoding='utf-8'))
+            #print(page_elm.content(), file=open("offer_" + initLogFile(), 'a', encoding='utf-8'))     
+            page_elm.get_by_role("row").nth(2).click()            
             acceptOffer(page_elm)
-            #page_elm.pause()
-            #Event().wait(waitTime) # wait for 1 hour
-        #if acceptBtn.is_visible():
-        #    acceptOffer(page_elm, acceptBtn)
+            noOfferFlag = True
+            continue
 
 
 def acceptOffer(page_elm):
-    print("-----acceptOffer() start-----")
+    #print("-----acceptOffer() start-----")
+    print(page_elm.content(), file=open("accept_" + initLogFile(), 'a', encoding='utf-8'))
     acceptBtn = page_elm.get_by_role("button", name="Accept") 
-    btn_elm.click()
+    acceptBtn.click()
     page_elm.wait_for_load_state()    
     jobTime = datetime.now()
     print(jobTime, " Job received at the", cnt, "th trial.")  
-    print(page_elm.content(), file=open("btn_" + initLogFile(), 'a', encoding='utf-8'))       
+    print(page_elm.content(), file=open("accepted_" + initLogFile(), 'a', encoding='utf-8'))       
     page_elm.goto(url_offer)
     page_elm.wait_for_url(url_offer)
-    print("-----acceptOffer() end-----")
+    #print("-----acceptOffer() end-----")
 
 
 def calRunCnt():
@@ -109,41 +102,9 @@ def calRunCnt():
         print(chkTime, ", run counts:", cnt, "times")
 
 
-def checkLogout(page_elm):
-    print("-----checkLogout()-----")
-    if (page_elm.url == url):
-        logoutTime = datetime.now()
-        print(logoutTime, ", logged out when trying the", cnt, "th times, will login again now.")
-        login(page_elm)     
-    else:
-        pass
-        
-
-def restartJob(page_elm):
-    print("-----restartJob() start-----")    
-    if not(checkNetwork()): raise RuntimeError("No Internet connection. Please check your network.")
-
-    page_elm.goto(url)
-    page_elm.wait_for_url(url)
-    page_elm.get_by_role("button", name="Sign In", exact=True).wait_for()
-    signInBtn = page_elm.get_by_role("button", name="Sign In", exact=True)
-    #checkLogout(page_elm)
-    if ((page_elm.url == url) and (signInBtn.is_visible())):
-        logoutTime = datetime.now()
-        print(logoutTime, ", logged out when trying the", cnt, "th times, will login again now.")
-        login(page_elm)     
-    elif ((page_elm.url == url) and not(signInBtn.is_visible())):
-        print("Cannot see the Sign In button, reload page...")
-        page_elm.reload()
-        restartJob(page_elm)
-    else:
-        pass
-    print("-----restartJob() end-----")
-
-
-def initLogFile():
-    fileName = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    fileName = fileName + "_debug.txt"
+def initLogFile() -> str:
+    fileName = datetime.now().strftime("%Y-%m-%d_%H-%M-%S-%f")[:-3]
+    fileName = fileName + "_debug"
     return fileName
     
 
@@ -153,6 +114,7 @@ def checkNetwork() -> bool:
         conn.request("HEAD", "/")
         return True
     except Exception:
+        print("No network connection, please check your network, programme will be stopped now.")
         return False
     finally:
         conn.close()
