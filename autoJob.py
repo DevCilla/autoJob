@@ -1,9 +1,9 @@
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 from datetime import datetime
-from threading import Event
 import http.client as httplib
 
-url = ''
+url_signin = ''
+url_welcome = ''
 url_offer = ''
 url_job = ''
 login_email = ''
