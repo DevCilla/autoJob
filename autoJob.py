@@ -15,40 +15,37 @@ isHeadless = True
 
 def run(playwright_elm):
     # initialize
+    global cnt
     browser = playwright_elm.chromium.launch(headless=isHeadless)
     context = browser.new_context()    
-
     while checkNetwork():
         try:            
             page = context.new_page()        
             #page.set_default_navigation_timeout(startTimeout)
-            page.goto(url)
-            page.wait_for_url(url)
+            page.goto(url_signin)
+            page.wait_for_url(url_signin)
             login(page)
             checkOffer(page)
-        except PlaywrightTimeoutError as timeout_e:
-            print(timeout_e)
-            endTime = datetime.now()
-            print(endTime, ", TIMEOUT when trying the", cnt, "th times.") 
-            page.close()
-            print("trying to restart...")   
         except Exception as e:
             curr_t = datetime.now()
-            print(curr_t, ", Exception caught when trying the", cnt, "th times.")
-            print("Reason:", e)
-            page.close()
-            print("trying to restart...")            
+            print(curr_t, ", count:", cnt, ", Exception caught:", e)
+            screenshotName = "ex-" + initLogFile() + ".png"
+            page.screenshot(path=screenshotName, full_page=True)
+        finally:
+            page.close()    
+            print("trying to restart...")
+            
               
 
 def login(page_elm):    
-    #print("-----login() start-----")   
+    #print("-----login() start-----")
     page_elm.get_by_role("button", name="Sign In", exact=True).wait_for()  
     page_elm.get_by_placeholder("E-mail address").fill(login_email)
     page_elm.get_by_placeholder("Password").fill(login_pwd)
     page_elm.get_by_role("button", name="Sign In", exact=True).click()
     page_elm.wait_for_url(url_job)
     loginTime = datetime.now()
-    print("logged in time:", loginTime)
+    print(loginTime, "logged in")
     #page_elm.set_default_navigation_timeout(inJobTimeout)
     #print("-----login() end-----")
     #page.get_by_role("link", name="Job Offers").click()    
@@ -56,37 +53,40 @@ def login(page_elm):
 
 def checkOffer(page_elm):
     global cnt
-    print("-----checkOffer()-----")
+    #print("-----checkOffer()-----")
     page_elm.goto(url_offer)
     page_elm.wait_for_url(url_offer)
     page_elm.get_by_role("heading", name="New Offers").wait_for()
     offerHeader = page_elm.get_by_role("heading", name="New Offers")
     noOffer = page_elm.get_by_role("heading", name="Sorry, there’s nothing here yet.")  
-    noOfferFlag =  noOffer.is_visible()
-    while noOfferFlag:        
+    #noOfferFlag =  noOffer.is_visible()
+    page_elm.pause()
+    while noOffer.is_visible():        
         cnt = cnt + 1
         calRunCnt()
         page_elm.reload()
         page_elm.wait_for_load_state("load")
         offerHeader.wait_for()
-        if not (noOfferFlag):
+        if not noOffer.is_visible():
             offerTime = datetime.now()
-            print(offerTime, ", Offer found when trying the", cnt, "th trial.") 
+            print(offerTime, "count:", cnt, ", Offer found") 
             #print(page_elm.content(), file=open("offer_" + initLogFile(), 'a', encoding='utf-8'))     
-            page_elm.get_by_role("row").nth(2).click()            
+            page_elm.get_by_role("row").nth(2).get_by_role("cell").nth(0).click()   
+            page_elm.wait_for_load_state()      
+            page_elm.get_by_role("row").nth(2).click()    
             acceptOffer(page_elm)
-            noOfferFlag = True
             continue
+    
 
 
 def acceptOffer(page_elm):
     #print("-----acceptOffer() start-----")
-    print(page_elm.content(), file=open("accept_" + initLogFile(), 'a', encoding='utf-8'))
+    #print(page_elm.content(), file=open("accept_" + initLogFile(), 'a', encoding='utf-8'))
     acceptBtn = page_elm.get_by_role("button", name="Accept") 
     acceptBtn.click()
     page_elm.wait_for_load_state()    
     jobTime = datetime.now()
-    print(jobTime, " Job received at the", cnt, "th trial.")  
+    print(jobTime, "Offer accepted.")  
     print(page_elm.content(), file=open("accepted_" + initLogFile(), 'a', encoding='utf-8'))       
     page_elm.goto(url_offer)
     page_elm.wait_for_url(url_offer)
@@ -95,11 +95,9 @@ def acceptOffer(page_elm):
 
 def calRunCnt():
     global cnt
-    if cnt < 1:
-        pass
-    elif (cnt % 50 == 0):
+    if (cnt % 100 == 0):
         chkTime = datetime.now()
-        print(chkTime, ", run counts:", cnt, "times")
+        print(chkTime, "run counts:", cnt, "times")
 
 
 def initLogFile() -> str:
@@ -114,7 +112,16 @@ def checkNetwork() -> bool:
         conn.request("HEAD", "/")
         return True
     except Exception:
-        print("No network connection, please check your network, programme will be stopped now.")
+        endTime = datetime.now()
+        print(endTime, "No network connection, please check your network, programme will stop now.")
+        return False
+    finally:
+        conn.close()
+
+with sync_playwright() as playwright:  
+    strTime = datetime.now()
+    print(strTime, 'started programme...')
+    run(playwright) 
         return False
     finally:
         conn.close()
